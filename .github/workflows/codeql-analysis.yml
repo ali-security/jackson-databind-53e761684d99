@@ -1,8 +1,7 @@
 name: "CodeQL"
 
 on:
-  schedule:
-    - cron: '40 21 * * 2'
+  workflow_dispatch: {}
   # Used to be run on PRs, merges; but too unreliable, removed
 permissions:
   contents: read
@@ -11,6 +10,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: read

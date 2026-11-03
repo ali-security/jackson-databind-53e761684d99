@@ -1,27 +1,18 @@
 name: Build and Test Snapshot (Windows)
 on:
-  push:
-    branches:
-    - master
-    - "3.0"
-    - "2.17"
-    paths-ignore:
-    - "README.md"
-    - "release-notes/*"
-  pull_request:
-    branches:
-    - master
-    - "3.0"
-    - "2.17"
-    paths-ignore:
-    - "README.md"
-    - "release-notes/*"
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: "Space-separated test class names to run (empty = full suite)"
+        required: false
+        default: ""
 permissions:
   contents: read
 
 jobs:
   build:
     runs-on: 'windows-2022'
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -37,4 +28,11 @@ jobs:
         java-version: ${{ matrix.java_version }}
         cache: 'maven'
     - name: Build
-      run: cmd /c "mvnw.cmd -B -ff -ntp clean verify"
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.test-filter }}" ]; then
+          FILTER="${{ inputs.test-filter }}"
+          cmd //c "mvnw.cmd -B -ff -ntp clean verify -Dtest=${FILTER// /,} -Dsurefire.failIfNoSpecifiedTests=false"
+        else
+          cmd //c "mvnw.cmd -B -ff -ntp clean verify"
+        fi

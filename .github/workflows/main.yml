@@ -1,32 +1,23 @@
 name: Build and Deploy Snapshot
 on:
-  push:
-    branches:
-    - master
-    - "3.0"
-    - "2.17"
-    paths-ignore:
-    - "README.md"
-    - "release-notes/*"
-  pull_request:
-    branches:
-    - master
-    - "3.0"
-    - "2.17"
-    paths-ignore:
-    - "README.md"
-    - "release-notes/*"
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: "Space-separated test class names to run (empty = full suite)"
+        required: false
+        default: ""
 permissions:
   contents: read
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         java_version: ['8', '11', '17', '21']
-        os: ['ubuntu-20.04']
+        os: ['ubuntu-latest']
     env:
       JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
     steps:
@@ -44,7 +35,20 @@ jobs:
         # gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }} # Value of the GPG private key to import
         # gpg-passphrase: MAVEN_GPG_PASSPHRASE # env variable for GPG private key passphrase
     - name: Build
-      run: ./mvnw -B -ff -ntp clean verify
+      run: |
+        if [ -n "${{ inputs.test-filter }}" ]; then
+          FILTER="${{ inputs.test-filter }}"
+          ./mvnw -B -ff -ntp clean verify -Dtest="${FILTER// /,}" -Dsurefire.failIfNoSpecifiedTests=false
+        else
+          ./mvnw -B -ff -ntp clean verify
+        fi
+    - name: Upload jar
+      if: matrix.java_version == '8'
+      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+      with:
+        name: jackson-databind-jar
+        path: target/jackson-databind-*[0-9].jar
+        if-no-files-found: error
     - name: Extract project Maven version
       id: projectVersion
       run: echo "version=$(./mvnw org.apache.maven.plugins:maven-help-plugin:3.3.0:evaluate -DforceStdout -Dexpression=project.version -q)" >> $GITHUB_OUTPUT
@@ -52,7 +56,7 @@ jobs:
       if: matrix.java_version == '8'
       run: ./mvnw -B -q -ff -ntp -DskipTests animal-sniffer:check
     - name: Deploy snapshot
-      if: github.event_name != 'pull_request' && matrix.java_version == '8' && endsWith(steps.projectVersion.outputs.version, '-SNAPSHOT')
+      if: false
       env:
         CI_DEPLOY_USERNAME: ${{ secrets.CI_DEPLOY_USERNAME }}
         CI_DEPLOY_PASSWORD: ${{ secrets.CI_DEPLOY_PASSWORD }}
@@ -62,7 +66,7 @@ jobs:
       if: github.event_name != 'pull_request' && matrix.java_version == '8'
       run: ./mvnw -B -q -ff -ntp test
     - name: Publish code coverage
-      if: github.event_name != 'pull_request' && matrix.java_version == '8'
+      if: false
       uses: codecov/codecov-action@54bcd8715eee62d40e33596ef5e8f0f48dbbccab # v4.1.0
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
